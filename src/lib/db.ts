@@ -1,8 +1,40 @@
 import Database from "better-sqlite3";
 import path from "path";
+import fs from "fs";
 
-// Initialize local SQLite database
-const dbPath = path.resolve(process.cwd(), "priceghost.db");
+/**
+ * PriceGhost Database Initialization
+ * 
+ * On Vercel serverless: The filesystem is read-only except /tmp.
+ * We copy the seed database to /tmp on cold start and use it from there.
+ * Locally: Uses process.cwd() directly (fully writable).
+ */
+
+function getDbPath(): string {
+  const isVercel = process.env.VERCEL === "1" || !!process.env.VERCEL_URL;
+  
+  if (isVercel) {
+    const tmpDbPath = "/tmp/priceghost.db";
+    
+    // On cold start, copy the bundled seed database to /tmp
+    if (!fs.existsSync(tmpDbPath)) {
+      const seedPath = path.resolve(process.cwd(), "priceghost.db");
+      if (fs.existsSync(seedPath)) {
+        fs.copyFileSync(seedPath, tmpDbPath);
+        console.log("[PriceGhost DB] Copied seed database to /tmp for serverless execution.");
+      } else {
+        console.log("[PriceGhost DB] No seed database found, creating fresh database in /tmp.");
+      }
+    }
+    
+    return tmpDbPath;
+  }
+  
+  // Local development: use project root
+  return path.resolve(process.cwd(), "priceghost.db");
+}
+
+const dbPath = getDbPath();
 const db = new Database(dbPath);
 
 // Enable WAL journal mode for optimal performance
